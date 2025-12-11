@@ -923,7 +923,7 @@ show_login_status_report() {
         done
     } > "$outfile"
 
-    dialog_cmd --textbox "$outfile" 25 80
+    dialog_cmd --ok-label "Back" --textbox "$outfile" 25 80
     rm -f "$outfile"
 }
 
