@@ -8,7 +8,7 @@ fi
 # --------------------------------------------------------------------
 # Version info
 # --------------------------------------------------------------------
-VG_VERSION="v0.7.5-alpha"
+VG_VERSION="v0.8.0-alpha"
 VG_DATE="$(git -C "$(dirname "$0")" log -1 --date=format:'%b %d %Y %H:%M' --format='%cd' 2>/dev/null || date +'%b %d %Y %H:%M')"   # git commit timestamp fallback to now
 
 SETTINGS_FILE="$HOME/.vergegrid_settings"
@@ -808,7 +808,8 @@ estate_controls_menu() {
             5 "Restart ONE Estate" \
             6 "Reload Config on ONE Estate" \
             7 "Edit Estate Args" \
-            8 "Back")
+            8 "Attach to Estate console (tmux)" \
+            9 "Back")
 
         case "$choice" in
             1) start_all ;;
@@ -818,6 +819,7 @@ estate_controls_menu() {
             5) instance_select restart ;;
             6) instance_select reload ;;
             7) instance_select editargs ;;
+            8) attach_estate_console ;;
             *) return ;;
         esac
     done
@@ -1116,6 +1118,38 @@ attach_tmux_session() {
     echo "Attaching to tmux session '$TMUX_SESSION'."
     echo "Detach with Ctrl-b then d to return to this menu."
     tmux attach -t "$TMUX_SESSION"
+    clear
+}
+
+attach_estate_console() {
+    mapfile -t estates < <(detect_estates)
+    declare -A estate_sessions=()
+    local menu=()
+
+    for e in "${estates[@]}"; do
+        local session
+        session=$(load_session "$(estate_session_file "$e")")
+        [ -z "$session" ] && continue
+        if ! tmux has-session -t "${session%%:*}" 2>/dev/null; then
+            continue
+        fi
+        estate_sessions["$e"]="$session"
+        menu+=("$e" "$(human_name "$e")")
+    done
+
+    if [ ${#menu[@]} -eq 0 ]; then
+        dialog_cmd --msgbox "No estate tmux consoles available." 10 60
+        return
+    fi
+
+    local sel
+    sel=$(dialog_cmd --stdout --menu "Select Estate Console" 20 70 12 "${menu[@]}")
+    [ -z "$sel" ] && return
+
+    clear
+    echo "Attaching to estate console (${estate_sessions[$sel]})."
+    echo "Detach with Ctrl-b then d to return to this menu."
+    tmux attach -t "${estate_sessions[$sel]}"
     clear
 }
 
