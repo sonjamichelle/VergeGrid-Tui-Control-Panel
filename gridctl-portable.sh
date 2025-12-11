@@ -663,7 +663,7 @@ login_menu() {
         3) login_region_single status ;;
         4) login_region_all enable ;;
         5) login_region_all disable ;;
-        6) login_region_all status ;;
+        6) login_status_all_panel ;;
         7) login_robust_level ;;
         8) login_robust_reset ;;
         9) login_robust_text ;;
@@ -729,7 +729,6 @@ login_region_all() {
         case "$action" in
             enable) backend_send_text "$session" "login enable" ;;
             disable) backend_send_text "$session" "login disable" ;;
-            status) backend_send_text "$session" "login status" ;;
         esac
     done
 }
@@ -759,6 +758,66 @@ login_robust_text() {
     local session
     session=$(load_session "$robust_session_file")
     backend_send_text "$session" "login text $text"
+}
+
+# ---------------------------------------------------------
+# Login status panel (all running regions)
+# ---------------------------------------------------------
+get_login_status() {
+    local estate="$1"
+    local session
+    session=$(load_session "$(estate_session_file "$estate")")
+    [ -z "$session" ] && { echo "UNKNOWN"; return; }
+
+    # Ask console, then capture recent pane output to infer status.
+    backend_send_text "$session" "login status"
+    sleep 1
+
+    local status="UNKNOWN"
+    local pane
+    pane=$(tmux capture-pane -pt "$session" -S -200 2>/dev/null | tail -n 200)
+
+    while IFS= read -r line; do
+        line_lower=${line,,}
+        case "$line_lower" in
+            *logins*enabled*|*login*enable*)   status="ENABLED" ;;
+            *logins*disabled*|*login*disable*) status="DISABLED" ;;
+        esac
+    done <<< "$pane"
+
+    echo "$status"
+}
+
+login_status_all_panel() {
+    mapfile -t estates < <(detect_estates)
+
+    local running=()
+    for e in "${estates[@]}"; do
+        running_instance "$e" && running+=("$e")
+    done
+
+    if [ ${#running[@]} -eq 0 ]; then
+        dialog_cmd --msgbox "No running regions to query." 10 40
+        return
+    fi
+
+    local lines=()
+    for e in "${running[@]}"; do
+        local status
+        status=$(get_login_status "$e")
+        lines+=("$(printf '%-30s : %s' "$(human_name "$e")" "$status")")
+    done
+
+    {
+        echo "LOGIN STATUS"
+        echo "------------"
+        for l in "${lines[@]}"; do
+            echo "$l"
+        done
+    } > /tmp/vg_loginstatus.$$
+
+    dialog_cmd --textbox /tmp/vg_loginstatus.$$ 25 70
+    rm -f /tmp/vg_loginstatus.$$
 }
 
 # ---------------------------------------------------------
