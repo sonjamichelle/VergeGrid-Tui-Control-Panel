@@ -430,7 +430,7 @@ static_stats() {
     disk_str=$(df -h / | awk 'NR==2 {print $3 " / " $2 " used (" $5 ")"}')
 
     local rx tx
-    read -r rx tx <<<"$(awk -F'[: ]+' 'NR>2 && $1 != "lo" {rx+=$3; tx+=$11} END {print rx, tx}')"
+    read -r rx tx <<<"$(awk -F'[: ]+' 'NR>2 && $1 != "lo" {rx+=$3; tx+=$11} END {print rx, tx}' /proc/net/dev)"
 
     {
         echo "STATIC SYSTEM SNAPSHOT"
@@ -468,14 +468,128 @@ echo
 
 # Turn off echo and enable immediate read
 stty -icanon -echo min 1 time 0
+trap 'stty sane; exit' INT TERM
+
+# Helper to grab CPU counters into an associative array
+read_cpu_snapshot() {
+    local -n out=$1
+    out=()
+    while read -r label user nice system idle iowait irq softirq steal rest; do
+        [[ "$label" != cpu* ]] && continue
+        out["$label"]="$user $nice $system $idle $iowait $irq $softirq $steal"
+    done < /proc/stat
+}
+
+calc_cpu_pct() {
+    local prev_line="$1" curr_line="$2"
+    [[ -z "$prev_line" || -z "$curr_line" ]] && { echo 0; return; }
+    local pu pn ps pi poi pir psf pst
+    local cu cn cs ci coi cir csf cst
+    read -r pu pn ps pi poi pir psf pst <<<"$prev_line"
+    read -r cu cn cs ci coi cir csf cst <<<"$curr_line"
+    local prev_total=$((pu+pn+ps+pi+poi+pir+psf+pst))
+    local curr_total=$((cu+cn+cs+ci+coi+cir+csf+cst))
+    local totald=$((curr_total-prev_total))
+    local idled=$(((ci+coi)-(pi+poi)))
+    local usedd=$((totald-idled))
+    if (( totald <= 0 )); then
+        echo 0
+    else
+        echo $((100 * usedd / totald))
+    fi
+}
+
+format_rate() {
+    local bytes=${1:-0}
+    awk -v b="$bytes" 'BEGIN {
+        if (b < 0) b = 0;
+        split("B/s KB/s MB/s GB/s", u, " ");
+        idx = 1;
+        while (b >= 1024 && idx < 4) {
+            b /= 1024;
+            idx++;
+        }
+        printf "%.1f %s\n", b, u[idx];
+    }'
+}
+
+read_disk_bytes() {
+    awk '
+        BEGIN {rs=0; ws=0}
+        $3 ~ /^(loop|ram)/ {next}
+        $3 ~ /^(sd|vd|xvd|nvme|md|dm-)/ {
+            rs += $6;
+            ws += $10;
+        }
+        END {printf "%.0f %.0f\n", rs*512, ws*512}
+    ' /proc/diskstats
+}
+
+get_default_iface() {
+    local iface=""
+    if command -v ip >/dev/null 2>&1; then
+        iface=$(ip route get 1.1.1.1 2>/dev/null | awk '/dev/ {for (i=1;i<=NF;i++) if ($i=="dev") {print $(i+1); exit}}')
+        if [ -z "$iface" ]; then
+            iface=$(ip -o -4 route show to default 2>/dev/null | awk 'NR==1 {for (i=1;i<=NF;i++) if ($i=="dev") {print $(i+1); exit}}')
+        fi
+        if [ -z "$iface" ]; then
+            iface=$(ip -o -4 addr show up scope global 2>/dev/null | awk 'NR==1 {print $2}')
+        fi
+    fi
+    if [ -z "$iface" ]; then
+        for dev in /sys/class/net/*; do
+            [ -d "$dev" ] || continue
+            base=${dev##*/}
+            [ "$base" = "lo" ] && continue
+            iface="$base"
+            break
+        done
+    fi
+    echo "$iface"
+}
+
+read_net_bytes() {
+    local iface="$1" rx tx
+    if [ -n "$iface" ] && [ -r "/sys/class/net/$iface/statistics/rx_bytes" ]; then
+        read -r rx < "/sys/class/net/$iface/statistics/rx_bytes"
+        read -r tx < "/sys/class/net/$iface/statistics/tx_bytes"
+    else
+        read -r rx tx <<<"$(awk -F'[: ]+' 'NR>2 {if ($1 == "lo") next; rx+=$3; tx+=$11} END {printf "%.0f %.0f", rx, tx}' /proc/net/dev)"
+    fi
+    rx=${rx:-0}
+    tx=${tx:-0}
+    echo "$rx $tx"
+}
+
+declare -A prev_cpu curr_cpu
+read_cpu_snapshot prev_cpu
+net_iface="$(get_default_iface)"
+read -r prev_rx prev_tx <<<"$(read_net_bytes "$net_iface")"
+read -r prev_disk_read prev_disk_write <<<"$(read_disk_bytes)"
 
 while true; do
-    # CPU
-    cpu_line=$(grep '^cpu ' /proc/stat)
-    read -r _ user nice system idle iowait irq softirq steal guest _ <<<"$cpu_line"
-    total=$((user+nice+system+idle+iowait+irq+softirq+steal))
-    used=$((total-idle-iowait))
-    cpu_pct=$((100 * used / total))
+    read_cpu_snapshot curr_cpu
+    cpu_pct=$(calc_cpu_pct "${prev_cpu[cpu]}" "${curr_cpu[cpu]}")
+
+    mapfile -t core_labels < <(printf '%s\n' "${!curr_cpu[@]}" | grep -E '^cpu[0-9]+' | sort -V)
+    core_lines=()
+    for label in "${core_labels[@]}"; do
+        pct=$(calc_cpu_pct "${prev_cpu[$label]}" "${curr_cpu[$label]}")
+        core="${label#cpu}"
+        core_lines+=("Core ${core} : ${pct}%")
+    done
+    for key in "${!curr_cpu[@]}"; do
+        prev_cpu["$key"]="${curr_cpu[$key]}"
+    done
+
+    # Disk IO (bytes per interval)
+    read -r disk_read disk_write <<<"$(read_disk_bytes)"
+    disk_read_diff=$((disk_read-prev_disk_read))
+    disk_write_diff=$((disk_write-prev_disk_write))
+    (( disk_read_diff < 0 )) && disk_read_diff=0
+    (( disk_write_diff < 0 )) && disk_write_diff=0
+    prev_disk_read=$disk_read
+    prev_disk_write=$disk_write
 
     # RAM
     ram_str=$(awk '/MemTotal/ {t=$2} /MemAvailable/ {a=$2} \
@@ -485,22 +599,43 @@ while true; do
     disk_str=$(df -h / | awk 'NR==2 {print $3 " / " $2 " used (" $5 ")"}')
 
     # Network
-    read -r rx tx <<<"$(awk -F'[: ]+' 'NR>2 && $1!= \"lo\" {rx+=$3; tx+=$11} END {print rx, tx})"
+    read -r rx tx <<<"$(read_net_bytes "$net_iface")"
+    net_rx_diff=$((rx-prev_rx))
+    net_tx_diff=$((tx-prev_tx))
+    (( net_rx_diff < 0 )) && net_rx_diff=0
+    (( net_tx_diff < 0 )) && net_tx_diff=0
+    prev_rx=$rx
+    prev_tx=$tx
+
+    disk_read_rate=$(format_rate "$disk_read_diff")
+    disk_write_rate=$(format_rate "$disk_write_diff")
+    net_rx_rate=$(format_rate "$net_rx_diff")
+    net_tx_rate=$(format_rate "$net_tx_diff")
+    net_label=${net_iface:-All}
 
     clear
     echo "VergeGrid Control Panel - Live System Stats"
     echo
     echo "CPU Usage : ${cpu_pct}%"
+    if ((${#core_lines[@]} > 0)); then
+        echo "Per-Core:"
+        for line in "${core_lines[@]}"; do
+            echo "  $line"
+        done
+        echo
+    fi
     echo "RAM Usage : ${ram_str}"
     echo "Disk Root : ${disk_str}"
+    echo "Disk I/O  : Read ${disk_read_rate} | Write ${disk_write_rate}"
     echo
-    echo "Network:"
-    echo "RX Bytes : ${rx}"
-    echo "TX Bytes : ${tx}"
+    echo "Network (${net_label}):"
+    echo "RX Rate : ${net_rx_rate}"
+    echo "TX Rate : ${net_tx_rate}"
     echo
     echo "Press q to return..."
 
-    read -t 1 -n 1 key
+    key=""
+    read -t 1 -n 1 key || true
     if [[ "$key" == "q" ]]; then
         break
     fi
@@ -511,7 +646,8 @@ EOF
 
     chmod +x "$script"
 
-    backend_new_session "live-stats" "$script; exit"
+    "$script"
+    rm -f "$script"
 }
 
 # ---------------------------------------------------------
@@ -640,6 +776,48 @@ stop_all() {
 
     for e in "${estates[@]}"; do
         stop_instance "$e" "$mode"
+    done
+}
+
+robust_controls_menu() {
+    while true; do
+        local choice
+        choice=$(dialog_cmd --stdout --menu "Robust Controls" 15 60 6 \
+            1 "Start Robust" \
+            2 "Stop Robust" \
+            3 "Back")
+
+        case "$choice" in
+            1) start_robust ;;
+            2) stop_robust ;;
+            *) return ;;
+        esac
+    done
+}
+
+estate_controls_menu() {
+    while true; do
+        local choice
+        choice=$(dialog_cmd --stdout --menu "Estate Controls" 22 70 12 \
+            1 "Start ALL Estates" \
+            2 "Stop ALL Estates" \
+            3 "Start ONE Estate" \
+            4 "Stop ONE Estate" \
+            5 "Restart ONE Estate" \
+            6 "Reload Config on ONE Estate" \
+            7 "Edit Estate Args" \
+            8 "Back")
+
+        case "$choice" in
+            1) start_all ;;
+            2) stop_all ;;
+            3) instance_select start ;;
+            4) instance_select stop ;;
+            5) instance_select restart ;;
+            6) instance_select reload ;;
+            7) instance_select editargs ;;
+            *) return ;;
+        esac
     done
 }
 
@@ -1028,39 +1206,25 @@ main_menu() {
         title="$(build_header)"
 
         local choice
-        choice=$(dialog_cmd --stdout --menu "$title" 22 70 15 \
-            1  "Start Robust" \
-            2  "Stop Robust" \
-            3  "Start ALL Estates" \
-            4  "Stop ALL Estates" \
-            5  "Start One Estate" \
-            6  "Stop One Estate" \
-            7  "Restart One Estate" \
-            8  "Reload Config" \
-            9  "Edit Estate Args" \
-            10 "Region Status" \
-            11 "System Info" \
-            12 "Login Controls" \
-            13 "Settings" \
-            14 "Attach to tmux session (Ctrl-b+d to exit)" \
-            15 "Quit")
+        choice=$(dialog_cmd --stdout --menu "$title" 22 70 10 \
+            1 "Robust Controls" \
+            2 "Estate Controls" \
+            3 "Login Controls" \
+            4 "Region Status" \
+            5 "System Info" \
+            6 "Settings" \
+            7 "Attach to tmux session (Ctrl-b+d to exit)" \
+            8 "Quit")
 
         case "$choice" in
-            1)  start_robust ;;
-            2)  stop_robust ;;
-            3)  start_all ;;
-            4)  stop_all ;;
-            5)  instance_select start ;;
-            6)  instance_select stop ;;
-            7)  instance_select restart ;;
-            8)  instance_select reload ;;
-            9)  instance_select editargs ;;
-            10) view_status ;;
-            11) system_info_menu ;;
-            12) login_menu ;;
-            13) settings_menu ;;
-            14) attach_tmux_session ;;
-            15) clear; exit 0 ;;
+            1) robust_controls_menu ;;
+            2) estate_controls_menu ;;
+            3) login_menu ;;
+            4) view_status ;;
+            5) system_info_menu ;;
+            6) settings_menu ;;
+            7) attach_tmux_session ;;
+            8) clear; exit 0 ;;
         esac
     done
 }
