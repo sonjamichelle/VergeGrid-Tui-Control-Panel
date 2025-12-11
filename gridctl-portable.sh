@@ -8,7 +8,7 @@ fi
 # --------------------------------------------------------------------
 # Version info
 # --------------------------------------------------------------------
-VG_VERSION="v0.7.4-alpha"
+VG_VERSION="v0.7.5-alpha"
 VG_DATE="$(git -C "$(dirname "$0")" log -1 --date=format:'%b %d %Y %H:%M' --format='%cd' 2>/dev/null || date +'%b %d %Y %H:%M')"   # git commit timestamp fallback to now
 
 SETTINGS_FILE="$HOME/.vergegrid_settings"
@@ -782,14 +782,16 @@ stop_all() {
 robust_controls_menu() {
     while true; do
         local choice
-        choice=$(dialog_cmd --stdout --menu "Robust Controls" 15 60 6 \
+        choice=$(dialog_cmd --stdout --menu "Robust Controls" 18 60 6 \
             1 "Start Robust" \
             2 "Stop Robust" \
-            3 "Back")
+            3 "Attach to Robust console (tmux)" \
+            4 "Back")
 
         case "$choice" in
             1) start_robust ;;
             2) stop_robust ;;
+            3) attach_robust_console ;;
             *) return ;;
         esac
     done
@@ -1114,6 +1116,26 @@ attach_tmux_session() {
     echo "Attaching to tmux session '$TMUX_SESSION'."
     echo "Detach with Ctrl-b then d to return to this menu."
     tmux attach -t "$TMUX_SESSION"
+    clear
+}
+
+attach_robust_console() {
+    local session
+    session=$(load_session "$robust_session_file")
+    if [ -z "$session" ]; then
+        dialog_cmd --msgbox "No Robust session found.\nStart Robust first." 10 60
+        return
+    fi
+
+    if ! tmux has-session -t "${session%%:*}" 2>/dev/null; then
+        dialog_cmd --msgbox "tmux session for Robust not found.\nStart Robust first." 10 60
+        return
+    fi
+
+    clear
+    echo "Attaching directly to Robust console ($session)."
+    echo "Detach with Ctrl-b then d to return to this menu."
+    tmux attach -t "$session"
     clear
 }
 
