@@ -643,6 +643,101 @@ stop_all() {
 # ---------------------------------------------------------
 # Login Control Functions
 # ---------------------------------------------------------
+
+# Send a console command, wait briefly, and capture the lines that appear
+# after it. Used for commands where we must read the response (login status).
+capture_session_command_output() {
+    local session="$1" cmd="$2" delay="${3:-1}"
+
+    [ -z "$session" ] && return
+
+    backend_send_text "$session" "$cmd"
+    sleep "$delay"
+
+    local capture
+    if ! capture=$(tmux capture-pane -t "$session" -p -S -200 2>/dev/null); then
+        return
+    fi
+    capture="${capture//$'\r'/}"
+
+    mapfile -t lines <<<"$capture"
+
+    local idx=-1 i
+    for i in "${!lines[@]}"; do
+        [[ "${lines[$i]}" == *"$cmd"* ]] && idx=$i
+    done
+
+    (( idx == -1 )) && return
+
+    local out=()
+    local prompt_re='[[:space:]]*[#>]$'
+    local count=0
+    for ((i=idx+1; i<${#lines[@]}; i++)); do
+        local line="${lines[$i]}"
+        if [[ "$line" =~ $prompt_re ]]; then
+            break
+        fi
+        out+=("$line")
+        count=$((count+1))
+        (( count >= 8 )) && break
+    done
+
+    printf '%s\n' "${out[@]}"
+}
+
+extract_login_status_line() {
+    local session="$1"
+    local raw
+    raw="$(capture_session_command_output "$session" "login status")"
+
+    if [ -z "$raw" ]; then
+        echo "No response"
+        return
+    fi
+
+    local line trimmed fallback=""
+    while IFS= read -r line; do
+        trimmed="$(echo "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        [ -z "$trimmed" ] && continue
+        if [[ "$trimmed" =~ [Ll]ogin ]]; then
+            echo "$trimmed"
+            return
+        fi
+        [ -z "$fallback" ] && fallback="$trimmed"
+    done <<<"$raw"
+
+    if [ -n "$fallback" ]; then
+        echo "$fallback"
+    else
+        echo "No response"
+    fi
+}
+
+show_login_status_report() {
+    local regions=("$@")
+    local outfile="/tmp/vg_login_status.$$"
+
+    {
+        echo "LOGIN STATUS (RUNNING REGIONS)"
+        echo "--------------------------------"
+        for e in "${regions[@]}"; do
+            local session human status
+            human="$(human_name "$e")"
+            session=$(load_session "$(estate_session_file "$e")")
+            if [ -z "$session" ]; then
+                printf '%-30s : %s\n' "$human" "Session not found"
+                continue
+            fi
+            status="$(extract_login_status_line "$session")"
+            [ -z "$status" ] && status="No response"
+            printf '%-30s : %s\n' "$human" "$status"
+        done
+    } > "$outfile"
+
+    dialog_cmd --textbox "$outfile" 25 80
+    rm -f "$outfile"
+}
+
 login_menu() {
     local choice
     choice=$(dialog_cmd --stdout --menu "Login Controls" 15 60 10 \
@@ -719,6 +814,11 @@ login_region_all() {
 
     if [ ${#running[@]} -eq 0 ]; then
         dialog_cmd --msgbox "No running regions to update." 10 40
+        return
+    fi
+
+    if [ "$action" = "status" ]; then
+        show_login_status_report "${running[@]}"
         return
     fi
 
