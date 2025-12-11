@@ -256,12 +256,13 @@ wait_for_exit_and_close() {
 # ---------------------------------------------------------
 start_robust() {
     local session
-    session=$(backend_new_session "Robust" \
+    session=$(backend_new_session "robust" \
         "cd \"$BASE\"; ulimit -s 1048576; \
          if [ -f Robust.dll ]; then dotnet Robust.dll -inifile=Robust.HG.ini; \
          elif [ -f Robust.exe ]; then mono --desktop -O=all Robust.exe -inifile=Robust.HG.ini; \
          else echo 'ERROR: No Robust.dll or Robust.exe found in \$(pwd)'; fi")
     save_session "$robust_session_file" "$session"
+    dialog_cmd --msgbox "Robust started in tmux window: $session\nAttach: tmux attach -t ${TMUX_SESSION}" 10 70
 }
 
 stop_robust() {
@@ -304,13 +305,14 @@ start_instance() {
     [ -f "$argfile" ] && extra=$(cat "$argfile")
 
     local session
-    session=$(backend_new_session "$(human_name "$estate")" \
+    session=$(backend_new_session "estate-$estate" \
         "cd \"$BASE\"; ulimit -s 1048576; \
          if [ -f OpenSim.dll ]; then dotnet OpenSim.dll --hypergrid=true --inidirectory=\"$dir\" $extra; \
          elif [ -f OpenSim.exe ]; then mono --desktop -O=all OpenSim.exe --hypergrid=true --inidirectory=\"$dir\" $extra; \
          else echo 'ERROR: No OpenSim.dll or OpenSim.exe found in \$(pwd)'; fi")
 
     save_session "$(estate_session_file "$estate")" "$session"
+    dialog_cmd --msgbox "$(human_name "$estate") started in tmux window: $session\nAttach: tmux attach -t ${TMUX_SESSION}" 10 70
 }
 
 stop_instance() {
@@ -506,7 +508,7 @@ EOF
 
     chmod +x "$script"
 
-    backend_new_session "Live Stats" "$script; exit"
+    backend_new_session "live-stats" "$script; exit"
 }
 
 # ---------------------------------------------------------
