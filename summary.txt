@@ -1,0 +1,11 @@
+VergeGrid TUI control script (bash) that wraps dialog + Konsole DBus to manage OpenSim “estates” and Robust:
+
+Initializes version info, settings file (~/.vergegrid_settings) with BASE/ESTATES paths, session tracking dir.
+UI helpers build header/backtitle, host/uptime line; dialog wrapper plus name formatting.
+Estate detection/validation and process checks (running_instance); Konsole DBus helpers (new tabs, run commands, set titles, send text).
+Start/stop Robust with graceful/force options, tracking Konsole session; similar start/stop/restart for estates using dotnet/mono with per-estate args.
+Reload config, edit estate args via dialog editbox.
+Region status view using dialog textbox.
+System info menu: OS/kernel/hardware snapshots, static stats (CPU/RAM/disk/net) and live stats in a Konsole tab via temp script.
+Batch start/stop all estates with cooling interval; login controls for single/all running regions plus Robust login level/message.
+Settings menu to edit BASE/ESTATES and save; main menu wiring all actions.
