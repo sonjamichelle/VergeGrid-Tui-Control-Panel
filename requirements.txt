@@ -1,2 +1,3 @@
-psutil
-rich
+textual>=0.58
+# ssh support uses system ssh client; if switching to asyncssh, add:
+# asyncssh>=2.14

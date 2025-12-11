@@ -8,7 +8,7 @@ fi
 # --------------------------------------------------------------------
 # Version info
 # --------------------------------------------------------------------
-VG_VERSION="v0.8.3-alpha"
+VG_VERSION="v0.9.0-alpha"
 VG_DATE="$(git -C "$(dirname "$0")" log -1 --date=format:'%b %d %Y %H:%M' --format='%cd' 2>/dev/null || date +'%b %d %Y %H:%M')"   # git commit timestamp fallback to now
 
 export NCURSES_NO_UTF8_ACS=1
