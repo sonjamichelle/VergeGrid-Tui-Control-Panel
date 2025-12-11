@@ -8,8 +8,12 @@ fi
 # --------------------------------------------------------------------
 # Version info
 # --------------------------------------------------------------------
-VG_VERSION="v0.8.0-alpha"
+VG_VERSION="v0.8.1-alpha"
 VG_DATE="$(git -C "$(dirname "$0")" log -1 --date=format:'%b %d %Y %H:%M' --format='%cd' 2>/dev/null || date +'%b %d %Y %H:%M')"   # git commit timestamp fallback to now
+
+export NCURSES_NO_UTF8_ACS=1
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 
 SETTINGS_FILE="$HOME/.vergegrid_settings"
 SETTINGS_FOUND=0
@@ -1262,15 +1266,14 @@ main_menu() {
         title="$(build_header)"
 
         local choice
-        choice=$(dialog_cmd --stdout --menu "$title" 22 70 10 \
+        choice=$(dialog_cmd --stdout --menu "$title" 22 70 9 \
             1 "Robust Controls" \
             2 "Estate Controls" \
             3 "Login Controls" \
             4 "Region Status" \
             5 "System Info" \
             6 "Settings" \
-            7 "Attach to tmux session (Ctrl-b+d to exit)" \
-            8 "Quit")
+            7 "Quit")
 
         case "$choice" in
             1) robust_controls_menu ;;
@@ -1279,8 +1282,7 @@ main_menu() {
             4) view_status ;;
             5) system_info_menu ;;
             6) settings_menu ;;
-            7) attach_tmux_session ;;
-            8) clear; exit 0 ;;
+            7) clear; exit 0 ;;
         esac
     done
 }
