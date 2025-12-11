@@ -8,7 +8,7 @@ fi
 # --------------------------------------------------------------------
 # Version info
 # --------------------------------------------------------------------
-VG_VERSION="v0.8.1-alpha"
+VG_VERSION="v0.8.2-alpha"
 VG_DATE="$(git -C "$(dirname "$0")" log -1 --date=format:'%b %d %Y %H:%M' --format='%cd' 2>/dev/null || date +'%b %d %Y %H:%M')"   # git commit timestamp fallback to now
 
 export NCURSES_NO_UTF8_ACS=1
@@ -928,31 +928,33 @@ show_login_status_report() {
 }
 
 login_menu() {
-    local choice
-    choice=$(dialog_cmd --stdout --menu "Login Controls" 15 60 10 \
-        1 "Enable logins on ONE region" \
-        2 "Disable logins on ONE region" \
-        3 "Show login status on ONE region" \
-        4 "Enable logins on ALL RUNNING regions" \
-        5 "Disable logins on ALL RUNNING regions" \
-        6 "Show login status on ALL RUNNING regions" \
-        7 "Set Robust login level" \
-        8 "Reset Robust login level" \
-        9 "Set Robust login message" \
-        10 "Back")
+    while true; do
+        local choice
+        choice=$(dialog_cmd --stdout --menu "Login Controls" 15 60 10 \
+            1 "Enable logins on ONE region" \
+            2 "Disable logins on ONE region" \
+            3 "Show login status on ONE region" \
+            4 "Enable logins on ALL RUNNING regions" \
+            5 "Disable logins on ALL RUNNING regions" \
+            6 "Show login status on ALL RUNNING regions" \
+            7 "Set Robust login level" \
+            8 "Reset Robust login level" \
+            9 "Set Robust login message" \
+            10 "Back")
 
-    case "$choice" in
-        1) login_region_single enable ;;
-        2) login_region_single disable ;;
-        3) login_region_single status ;;
-        4) login_region_all enable ;;
-        5) login_region_all disable ;;
-        6) login_status_all_panel ;;
-        7) login_robust_level ;;
-        8) login_robust_reset ;;
-        9) login_robust_text ;;
-        *) return ;;
-    esac
+        case "$choice" in
+            1) login_region_single enable ;;
+            2) login_region_single disable ;;
+            3) login_region_single status ;;
+            4) login_region_all enable ;;
+            5) login_region_all disable ;;
+            6) login_status_all_panel ;;
+            7) login_robust_level ;;
+            8) login_robust_reset ;;
+            9) login_robust_text ;;
+            *) return ;;
+        esac
+    done
 }
 
 # Region login commands (single)
@@ -1105,7 +1107,7 @@ login_status_all_panel() {
         done
     } > /tmp/vg_loginstatus.$$
 
-    dialog_cmd --textbox /tmp/vg_loginstatus.$$ 25 70
+    dialog_cmd --ok-label "Back" --textbox /tmp/vg_loginstatus.$$ 25 70
     rm -f /tmp/vg_loginstatus.$$
 }
 
