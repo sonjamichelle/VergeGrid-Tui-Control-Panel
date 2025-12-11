@@ -399,3 +399,44 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# IDE/editor
+.vscode/
+.idea/
+
+# PyInstaller
+*.spec
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# TUI runtime caches
+.cache/
