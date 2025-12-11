@@ -923,7 +923,7 @@ show_login_status_report() {
         done
     } > "$outfile"
 
-    dialog_cmd --ok-label "Back" --textbox "$outfile" 25 80
+    dialog_cmd --exit-label "Back" --textbox "$outfile" 25 80
     rm -f "$outfile"
 }
 
@@ -1107,7 +1107,7 @@ login_status_all_panel() {
         done
     } > /tmp/vg_loginstatus.$$
 
-    dialog_cmd --ok-label "Back" --textbox /tmp/vg_loginstatus.$$ 25 70
+    dialog_cmd --exit-label "Back" --textbox /tmp/vg_loginstatus.$$ 25 70
     rm -f /tmp/vg_loginstatus.$$
 }
 
