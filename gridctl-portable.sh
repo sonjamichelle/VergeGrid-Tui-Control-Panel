@@ -930,12 +930,22 @@ instance_select() {
 
     local menu=()
     for e in "${estates[@]}"; do
+        local state
         if running_instance "$e"; then
-            menu+=("$e" "Running")
+            state="Running"
+            if [ "$action" = "start" ]; then
+                continue    # do not show running estates in the Start menu
+            fi
         else
-            menu+=("$e" "Stopped")
+            state="Stopped"
         fi
+        menu+=("$e" "$state")
     done
+
+    if [ ${#menu[@]} -eq 0 ]; then
+        dialog_cmd --msgbox "No eligible estates for this action." 10 60
+        return
+    fi
 
     local sel
     sel=$(dialog_cmd --stdout --menu "Select Estate" 20 60 12 "${menu[@]}")
