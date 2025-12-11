@@ -12,14 +12,17 @@ VG_VERSION="v0.6.6-alpha"
 VG_DATE="$(date +'%b %d %Y %H:%M')"   # Dec 10 2025 21:07 style
 
 SETTINGS_FILE="$HOME/.vergegrid_settings"
+SETTINGS_FOUND=0
 
 # ---------------------------------------------------------
 # Load and save settings
 # ---------------------------------------------------------
 load_settings() {
+    SETTINGS_FOUND=0
     if [ -f "$SETTINGS_FILE" ]; then
         # shellcheck source=/dev/null
         source "$SETTINGS_FILE"
+        SETTINGS_FOUND=1
     fi
 
     BASE="${VG_BASE:-/home/opensim/opensim/bin}"
@@ -921,6 +924,22 @@ login_status_all_panel() {
 }
 
 # ---------------------------------------------------------
+# Attach to tmux session
+# ---------------------------------------------------------
+attach_tmux_session() {
+    if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+        dialog_cmd --msgbox "tmux session '$TMUX_SESSION' not found.\nStart Robust or a region first." 10 70
+        return
+    fi
+
+    clear
+    echo "Attaching to tmux session '$TMUX_SESSION'."
+    echo "Detach with Ctrl-b then d to return to this menu."
+    tmux attach -t "$TMUX_SESSION"
+    clear
+}
+
+# ---------------------------------------------------------
 # Instance selection (generic actions)
 # ---------------------------------------------------------
 instance_select() {
@@ -988,6 +1007,18 @@ settings_menu() {
     done
 }
 
+# Ensure we have user-provided BASE/ESTATES on first launch instead of defaults.
+ensure_settings_configured() {
+    if [ "$SETTINGS_FOUND" -eq 1 ]; then
+        return
+    fi
+
+    dialog_cmd --msgbox "First run detected. Please configure BASE and ESTATES directories." 10 70
+    settings_menu
+    load_settings
+    SETTINGS_FOUND=1
+}
+
 # ---------------------------------------------------------
 # Main Menu
 # ---------------------------------------------------------
@@ -1011,7 +1042,8 @@ main_menu() {
             11 "System Info" \
             12 "Login Controls" \
             13 "Settings" \
-            14 "Quit")
+            14 "Attach to tmux session (Ctrl-b+d to exit)" \
+            15 "Quit")
 
         case "$choice" in
             1)  start_robust ;;
@@ -1027,9 +1059,11 @@ main_menu() {
             11) system_info_menu ;;
             12) login_menu ;;
             13) settings_menu ;;
-            14) clear; exit 0 ;;
+            14) attach_tmux_session ;;
+            15) clear; exit 0 ;;
         esac
     done
 }
 
+ensure_settings_configured
 main_menu
