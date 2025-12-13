@@ -264,7 +264,7 @@ wait_for_exit_and_close() {
 start_robust() {
     local session
     session=$(backend_new_session "robust" \
-        "cd \"$BASE\"; ulimit -s 1048576; \
+        "cd \"$BASE\"; \
          if [ -f Robust.dll ]; then dotnet Robust.dll -inifile=Robust.HG.ini; \
          elif [ -f Robust.exe ]; then mono --desktop -O=all Robust.exe -inifile=Robust.HG.ini; \
          else echo 'ERROR: No Robust.dll or Robust.exe found in \$(pwd)'; fi")
@@ -313,13 +313,12 @@ start_instance() {
 
     local session
     session=$(backend_new_session "estate-$estate" \
-        "cd \"$BASE\"; ulimit -s 1048576; \
-         if [ -f OpenSim.dll ]; then dotnet OpenSim.dll --hypergrid=true --inidirectory=\"$dir\" $extra; \
-         elif [ -f OpenSim.exe ]; then mono --desktop -O=all OpenSim.exe --hypergrid=true --inidirectory=\"$dir\" $extra; \
-         else echo 'ERROR: No OpenSim.dll or OpenSim.exe found in \$(pwd)'; fi")
+        "cd \"$BASE\"; \
+         ulimit -s 262144; \
+         exec dotnet OpenSim.dll --hypergrid=true --inidirectory=\"$dir\" $extra")
 
     save_session "$(estate_session_file "$estate")" "$session"
-    dialog_cmd --msgbox "$(human_name "$estate") started in tmux window: $session\nAttach: tmux attach -t ${TMUX_SESSION}" 10 70
+    [ "$2" = "true" ] || dialog_cmd --msgbox "$(human_name "$estate") started in tmux window: $session\nAttach: tmux attach -t ${TMUX_SESSION}" 10 70
 }
 
 stop_instance() {
@@ -751,8 +750,18 @@ start_all() {
     local count=0
 
     for e in "${to_start[@]}"; do
-        start_instance "$e"
+        dialog_cmd --infobox "Starting estate:\n\n$(human_name "$e")" 6 60
+        start_instance "$e" true
+        sleep 2
+
+        if running_instance "$e"; then
+            dialog_cmd --infobox "Estate started successfully:\n\n$(human_name "$e")" 6 60
+        else
+            dialog_cmd --infobox "FAILED to start estate:\n\n$(human_name "$e")" 6 60
+        fi
+
         count=$((count+1))
+        sleep 1
 
         if (( count % BATCH_SIZE == 0 && count < total )); then
             dialog_cmd --infobox "Cooling for ${BATCH_DELAY}s…" 5 40
@@ -779,7 +788,21 @@ stop_all() {
     esac
 
     for e in "${estates[@]}"; do
+        if ! running_instance "$e"; then
+            continue
+        fi
+
+        dialog_cmd --infobox "Stopping estate:\n\n$(human_name "$e")" 6 60
         stop_instance "$e" "$mode"
+        sleep 2
+
+        if running_instance "$e"; then
+            dialog_cmd --infobox "FAILED to stop estate:\n\n$(human_name "$e")" 6 60
+        else
+            dialog_cmd --infobox "Estate stopped:\n\n$(human_name "$e")" 6 60
+        fi
+
+        sleep 1
     done
 }
 
