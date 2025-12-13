@@ -24,7 +24,8 @@ from textual.widgets import (
     ListItem, ListView, Log, ProgressBar, Static, TextArea
 )
 
-from vg.backend import estates, settings, tmux
+import psutil
+from vg.backend import settings
 from vg.backend.transport import LocalTransport, detect_transport, TransportConfig
 
 # Version info
