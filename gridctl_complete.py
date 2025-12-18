@@ -24,7 +24,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen, ScreenResultType
 from textual.widgets import (
     Button, DataTable, Footer, Header, Input, Label, 
-    ListItem, ListView, Log, ProgressBar, Static, TextArea, TextLog
+    ListItem, ListView, Log, ProgressBar, Static, TextArea
 )
 
 import psutil
@@ -60,6 +60,22 @@ def get_host_info() -> HostInfo:
         uptime = "unknown"
     
     return HostInfo(hostname, os_info, uptime)
+
+
+class ConsoleLog(Static):
+    """Simple log widget that caches lines and exposes clear()."""
+
+    def __init__(self, **kwargs):
+        super().__init__("", **kwargs)
+        self.lines: List[str] = []
+
+    def write(self, line: str) -> None:
+        self.lines.append(line)
+        self.update("\n".join(self.lines[-1000:]))
+
+    def clear(self) -> None:
+        self.lines.clear()
+        self.update("")
 
 def human_name(name: str) -> str:
     return name.replace("_", " ")
@@ -710,13 +726,13 @@ class TmuxConsoleScreen(Screen):
         self.app_ref = app_ref
         self.session = session
         self.title = title
-        self.console_log: TextLog
+        self.console_log: ConsoleLog
         self.command_input: Input
         self.poll_task: asyncio.Task | None = None
         self._last_output: str = ""
 
     def compose(self) -> ComposeResult:
-        self.console_log = TextLog(highlight=False, classes="console-log")
+        self.console_log = ConsoleLog(classes="console-log")
         self.command_input = Input(placeholder="Send command (Enter)", classes="console-input")
         yield Container(
             Vertical(
