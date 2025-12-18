@@ -466,12 +466,13 @@ load_oar() {
     region=$(select_region_for_estate "$estate")
     [ -z "$region" ] && return
 
-    local oar_root="${VG_OAR_DIR:-$(readlink -f "$ESTATES/../OAR")}"
+    local oar_root="/mnt/sdb1/Grid_Stuff/OAR"
     [ -d "$oar_root" ] || oar_root="$ESTATES/"
     local start_dir="$oar_root"
     while true; do
         file=$(dialog_cmd --stdout --fselect "$start_dir" 20 70)
         file="${file//$'\r'/}"
+        file="${file//$'\n'/}"
         [ -z "$file" ] && return
         if [ -d "$file" ]; then
             start_dir="$(readlink -f "$file")/"
