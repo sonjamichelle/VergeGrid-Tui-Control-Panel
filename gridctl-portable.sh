@@ -466,8 +466,16 @@ load_oar() {
     region=$(select_region_for_estate "$estate")
     [ -z "$region" ] && return
 
-    file=$(dialog_cmd --stdout --fselect "$ESTATES/" 20 70)
-    [ -z "$file" ] && return
+    local start_dir="$ESTATES/"
+    while true; do
+        file=$(dialog_cmd --stdout --fselect "$start_dir" 20 70)
+        [ -z "$file" ] && return
+        if [ -d "$file" ]; then
+            start_dir="${file%/}/"
+            continue
+        fi
+        break
+    done
 
     merge_flag=""
     if dialog_cmd --stdout --yesno "Merge the OAR contents with the existing region?" 7 60; then
