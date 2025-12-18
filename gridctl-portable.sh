@@ -477,20 +477,48 @@ load_oar() {
         break
     done
 
-    merge_flag=""
-    if dialog_cmd --stdout --yesno "Merge the OAR contents with the existing region?" 7 60; then
-        merge_flag="--merge"
+    local flags
+    flags=$(dialog_cmd --stdout --checklist "Select load oar options" 15 70 4 \
+        1 "Merge with existing region (--merge)" off \
+        2 "Specify rotation degrees (--rotation)" off \
+        3 "Offset after load (--displacement)" off)
+
+    rotation=""
+    displacement=""
+    cmd_args=""
+
+    if printf '%s\n' "$flags" | grep -q '"1"'; then
+        cmd_args="$cmd_args --merge"
     fi
 
-    rotation=$(dialog_cmd --stdout --inputbox "Rotation degrees (leave empty to skip)" 8 60 "")
-    displacement=$(dialog_cmd --stdout --inputbox "Displacement <x,y,z> (leave empty to skip)" 8 60 "")
-
-    cmd="load oar"
-    [ -n "$merge_flag" ] && cmd="$cmd $merge_flag"
-    [ -n "$rotation" ] && cmd="$cmd --rotation $rotation"
-    if [ -n "$displacement" ]; then
-        cmd="$cmd --displacement \"$displacement\""
+    if printf '%s\n' "$flags" | grep -q '"2"'; then
+        while true; do
+            rotation=$(dialog_cmd --stdout --inputbox "Rotation degrees (-360 to 360)" 8 60 "")
+            case "$rotation" in
+                '' ) break ;;
+                -[0-9]*|[0-9]*)
+                    if (( rotation >= -360 && rotation <= 360 )); then
+                        cmd_args="$cmd_args --rotation $rotation"
+                        break
+                    fi
+                    ;;
+            esac
+            dialog_cmd --msgbox "Invalid rotation. Please enter a number between -360 and 360." 8 60
+        done
     fi
+
+    if printf '%s\n' "$flags" | grep -q '"3"'; then
+        while true; do
+            displacement=$(dialog_cmd --stdout --inputbox "Displacement <x,y,z>" 8 70 "")
+            if [[ "$displacement" =~ ^-?[0-9]+,[-0-9]+,[-0-9]+$ ]]; then
+                cmd_args="$cmd_args --displacement \"$displacement\""
+                break
+            fi
+            dialog_cmd --msgbox "Invalid displacement. Use the format <x,y,z> with integers." 8 70
+        done
+    fi
+
+    cmd="load oar $cmd_args"
 
     cmd="$cmd $(printf '%q' "$file")"
 
