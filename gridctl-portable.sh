@@ -401,6 +401,28 @@ select_estate_for_action() {
 }
 
 # ---------------------------------------------------------
+# Estate helper: select region menu
+# ---------------------------------------------------------
+select_region_for_estate() {
+    local estate="$1"
+    local dir="$ESTATES/$estate/Regions"
+    shopt -s nullglob
+    local files=("$dir"/*.ini)
+    shopt -u nullglob
+    [ ${#files[@]} -eq 0 ] && return
+
+    local menu=()
+    for file in "${files[@]}"; do
+        local name
+        name=$(basename "$file")
+        name="${name%.ini}"
+        menu+=("$name" "$(human_name "$name")")
+    done
+
+    dialog_cmd --stdout --menu "Select Region" 20 70 10 "${menu[@]}"
+}
+
+# ---------------------------------------------------------
 # Region Status view
 # ---------------------------------------------------------
 view_status() {
@@ -436,40 +458,55 @@ view_status() {
 # OAR Controls
 # ---------------------------------------------------------
 load_oar() {
-    local file estate
+    local estate region file session merge_flag rotation displacement cmd
+
+    estate=$(select_estate_for_action "Select estate to load into")
+    [ -z "$estate" ] && return
+
+    region=$(select_region_for_estate "$estate")
+    [ -z "$region" ] && return
+
     file=$(dialog_cmd --stdout --fselect "$ESTATES/" 20 70)
     [ -z "$file" ] && return
 
-    estate=$(select_estate_for_action "Load OAR into which estate?")
-    [ -z "$estate" ] && return
+    merge_flag=""
+    if dialog_cmd --stdout --yesno "Merge the OAR contents with the existing region?" 7 60; then
+        merge_flag="--merge"
+    fi
 
-    dialog_cmd --infobox "Loading OAR $(basename "$file") into $(human_name "$estate")..." 8 60
-    # TODO: add actual import command
-}
+    rotation=$(dialog_cmd --stdout --inputbox "Rotation degrees (leave empty to skip)" 8 60 "")
+    displacement=$(dialog_cmd --stdout --inputbox "Displacement <x,y,z> (leave empty to skip)" 8 60 "")
 
-save_oar() {
-    local estate out
-    estate=$(select_estate_for_action "Save OAR from which estate?")
-    [ -z "$estate" ] && return
+    cmd="load oar"
+    [ -n "$merge_flag" ] && cmd="$cmd $merge_flag"
+    [ -n "$rotation" ] && cmd="$cmd --rotation $rotation"
+    if [ -n "$displacement" ]; then
+        cmd="$cmd --displacement \"$displacement\""
+    fi
 
-    out=$(dialog_cmd --stdout --fselect "$ESTATES/$estate/" 20 70)
-    [ -z "$out" ] && return
+    cmd="$cmd $(printf '%q' "$file")"
 
-    dialog_cmd --infobox "Saving estate $(human_name "$estate") to $(basename "$out")..." 8 60
-    # TODO: add actual export command
+    session=$(load_session "$(estate_session_file "$estate")")
+    if [ -z "$session" ]; then
+        dialog_cmd --msgbox "No tmux session found for $(human_name "$estate"). Start the estate first." 10 70
+        return
+    fi
+
+    backend_send_text "$session" "change region \"$region\""
+    backend_send_text "$session" "$cmd"
+
+    dialog_cmd --msgbox "Command sent:\n\n$cmd" 10 70
 }
 
 oar_controls_menu() {
     while true; do
         local choice
-        choice=$(dialog_cmd --stdout --menu "OAR Controls" 20 70 4 \
+        choice=$(dialog_cmd --stdout --menu "OAR Controls" 20 70 3 \
             1 "Load OAR" \
-            2 "Save OAR" \
-            3 "Back")
+            2 "Back")
 
         case "$choice" in
             1) load_oar ;;
-            2) save_oar ;;
             *) return ;;
         esac
     done
