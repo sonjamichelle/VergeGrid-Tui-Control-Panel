@@ -694,8 +694,11 @@ class EstateControlScreen(Screen):
                 if not tmux_bin:
                     self.status_log.write("tmux not found; cannot attach.")
                     return
-                self.app.exit()
-                os.execvp(tmux_bin, [tmux_bin, "attach", "-t", session])
+                self.status_log.write(f"Attaching to tmux session {session}...")
+                try:
+                    subprocess.run([tmux_bin, "attach", "-t", session], check=True)
+                except subprocess.CalledProcessError as exc:
+                    self.status_log.write(f"tmux attach failed: {exc}")
     
     async def start_estate(self, estate: str) -> None:
         """Start a specific estate."""
@@ -980,8 +983,15 @@ class RobustControlScreen(Screen):
         session_file = Path.home() / ".gridstl_sessions" / "robust.session"
         if session_file.exists():
             session = session_file.read_text().strip()
-            self.app.exit()
-            os.system(f"tmux attach -t '{session}'")
+            tmux_bin = shutil.which("tmux")
+            if not tmux_bin:
+                self.status_log.write("tmux not found; cannot attach.")
+                return
+            self.status_log.write(f"Attaching to tmux session {session}...")
+            try:
+                subprocess.run([tmux_bin, "attach", "-t", session], check=True)
+            except subprocess.CalledProcessError as exc:
+                self.status_log.write(f"tmux attach failed: {exc}")
         else:
             self.status_log.write("No Robust session found")
 
