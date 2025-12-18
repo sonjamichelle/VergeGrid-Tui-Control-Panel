@@ -517,6 +517,7 @@ class EstateControlScreen(Screen):
                 ),
                 Horizontal(
                     Button("Console", id="console"),
+                    Button("Region Status", id="region_status"),
                     Button("Back", id="back"),
                     classes="button-row"
                 ),
@@ -572,6 +573,8 @@ class EstateControlScreen(Screen):
             await self.edit_estate_args()
         elif event.button.id == "console":
             await self.attach_estate_console()
+        elif event.button.id == "region_status":
+            self.app.push_screen(RegionStatusScreen(self.app_ref))
     
     async def get_estate_list(self) -> List[str]:
         """Get list of detected estates."""
@@ -1287,7 +1290,6 @@ class MainScreen(Screen):
             ("robust", "Robust Controls", lambda: RobustControlScreen(self.app_ref)),
             ("estates", "Estate Controls", lambda: EstateControlScreen(self.app_ref)),
             ("login", "Login Controls", lambda: LoginControlScreen(self.app_ref)),
-            ("status", "Region Status", lambda: RegionStatusScreen(self.app_ref)),
             ("sysinfo", "System Info", lambda: SystemInfoScreen()),
             ("settings", "Settings", lambda: SettingsScreen(self.app_ref)),
             ("quit", "Quit", lambda: self.app.exit()),
