@@ -61,6 +61,10 @@ def get_host_info() -> HostInfo:
     
     return HostInfo(hostname, os_info, uptime)
 
+def human_name(name: str) -> str:
+    return name.replace("_", " ")
+
+
 def get_system_stats() -> Dict[str, str]:
     """Get system statistics."""
     stats = {}
