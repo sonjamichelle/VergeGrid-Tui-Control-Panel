@@ -384,6 +384,23 @@ edit_estate_args() {
 }
 
 # ---------------------------------------------------------
+# Estate helper: select estate menu
+# ---------------------------------------------------------
+select_estate_for_action() {
+    local prompt="$1"
+
+    mapfile -t estates < <(detect_estates)
+    [ ${#estates[@]} -eq 0 ] && return
+
+    local menu=()
+    for e in "${estates[@]}"; do
+        menu+=("$e" "$(human_name "$e")")
+    done
+
+    dialog_cmd --stdout --menu "$prompt" 20 70 10 "${menu[@]}"
+}
+
+# ---------------------------------------------------------
 # Region Status view
 # ---------------------------------------------------------
 view_status() {
@@ -413,6 +430,49 @@ view_status() {
 
     dialog_cmd --exit-label "Back" --textbox /tmp/vg_status.$$ 25 70
     rm -f /tmp/vg_status.$$
+}
+
+# ---------------------------------------------------------
+# OAR Controls
+# ---------------------------------------------------------
+load_oar() {
+    local file estate
+    file=$(dialog_cmd --stdout --fselect "$ESTATES/" 20 70)
+    [ -z "$file" ] && return
+
+    estate=$(select_estate_for_action "Load OAR into which estate?")
+    [ -z "$estate" ] && return
+
+    dialog_cmd --infobox "Loading OAR $(basename "$file") into $(human_name "$estate")..." 8 60
+    # TODO: add actual import command
+}
+
+save_oar() {
+    local estate out
+    estate=$(select_estate_for_action "Save OAR from which estate?")
+    [ -z "$estate" ] && return
+
+    out=$(dialog_cmd --stdout --fselect "$ESTATES/$estate/" 20 70)
+    [ -z "$out" ] && return
+
+    dialog_cmd --infobox "Saving estate $(human_name "$estate") to $(basename "$out")..." 8 60
+    # TODO: add actual export command
+}
+
+oar_controls_menu() {
+    while true; do
+        local choice
+        choice=$(dialog_cmd --stdout --menu "OAR Controls" 20 70 4 \
+            1 "Load OAR" \
+            2 "Save OAR" \
+            3 "Back")
+
+        case "$choice" in
+            1) load_oar ;;
+            2) save_oar ;;
+            *) return ;;
+        esac
+    done
 }
 
 # ---------------------------------------------------------
@@ -1293,21 +1353,23 @@ main_menu() {
         title="$(build_header)"
 
         local choice
-        choice=$(dialog_cmd --stdout --menu "$title" 22 70 6 \
+        choice=$(dialog_cmd --stdout --menu "$title" 22 70 7 \
             1 "Robust Controls" \
             2 "Estate Controls" \
             3 "Login Controls" \
-            4 "System Info" \
-            5 "Settings" \
-            6 "Quit")
+            4 "OAR Controls" \
+            5 "System Info" \
+            6 "Settings" \
+            7 "Quit")
 
         case "$choice" in
             1) robust_controls_menu ;;
             2) estate_controls_menu ;;
             3) login_menu ;;
-            4) system_info_menu ;;
-            5) settings_menu ;;
-            6) clear; exit 0 ;;
+            4) oar_controls_menu ;;
+            5) system_info_menu ;;
+            6) settings_menu ;;
+            7) clear; exit 0 ;;
         esac
     done
 }
