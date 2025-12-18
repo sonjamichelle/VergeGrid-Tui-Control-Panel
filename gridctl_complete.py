@@ -7,6 +7,7 @@ Full conversion of gridctl-portable.sh functionality.
 import asyncio
 import os
 import platform
+import shutil
 import socket
 import subprocess
 import time
@@ -689,8 +690,12 @@ class EstateControlScreen(Screen):
             session_file = Path.home() / ".gridstl_sessions" / f"estate_{selected}.session"
             if session_file.exists():
                 session = session_file.read_text().strip()
+                tmux_bin = shutil.which("tmux")
+                if not tmux_bin:
+                    self.status_log.write("tmux not found; cannot attach.")
+                    return
                 self.app.exit()
-                os.system(f"tmux attach -t '{session}'")
+                os.execvp(tmux_bin, [tmux_bin, "attach", "-t", session])
     
     async def start_estate(self, estate: str) -> None:
         """Start a specific estate."""
