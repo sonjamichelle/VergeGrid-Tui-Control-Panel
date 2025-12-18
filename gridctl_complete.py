@@ -25,7 +25,7 @@ from textual.widgets import (
 )
 
 import psutil
-from vg.backend import settings
+from vg.backend import estates, settings, tmux
 from vg.backend.transport import LocalTransport, detect_transport, TransportConfig
 
 # Version info
