@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from functools import partial
+
 from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
@@ -376,7 +378,7 @@ class LoginControlScreen(Screen):
             self.status_log.write("No running regions available")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal(f"Select Region to {action.title()}", running_estates)
         )
         
@@ -397,7 +399,7 @@ class LoginControlScreen(Screen):
             self.status_log.write("No running regions to update")
             return
         
-        confirmed = await self.app.push_screen_wait(
+        confirmed = await self.app.push_modal(
             ConfirmModal(f"{action.title()} logins on all running regions?", f"Confirm {action.title()} All")
         )
         
@@ -573,7 +575,7 @@ class EstateControlScreen(Screen):
             self.status_log.write("No stopped estates to start")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal("Select Estate to Start", stopped_estates)
         )
         
@@ -597,7 +599,7 @@ class EstateControlScreen(Screen):
             self.status_log.write("No running estates to stop")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal("Select Estate to Stop", running_estates)
         )
         
@@ -611,7 +613,7 @@ class EstateControlScreen(Screen):
             self.status_log.write("No estates found")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal("Select Estate to Restart", estate_list)
         )
         
@@ -632,7 +634,7 @@ class EstateControlScreen(Screen):
             self.status_log.write("No running estates to reload")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal("Select Estate to Reload", running_estates)
         )
         
@@ -646,7 +648,7 @@ class EstateControlScreen(Screen):
             self.status_log.write("No estates found")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal("Select Estate to Edit Args", estate_list)
         )
         
@@ -657,7 +659,7 @@ class EstateControlScreen(Screen):
             if args_file.exists():
                 current_args = args_file.read_text().strip()
             
-            new_args = await self.app.push_screen_wait(
+            new_args = await self.app.push_modal(
                 EstateArgsModal(selected, current_args)
             )
             
@@ -678,7 +680,7 @@ class EstateControlScreen(Screen):
             self.status_log.write("No running estates with consoles")
             return
         
-        selected = await self.app.push_screen_wait(
+        selected = await self.app.push_modal(
             EstateSelectModal("Select Estate Console", running_estates)
         )
         
@@ -732,7 +734,7 @@ class EstateControlScreen(Screen):
         
         try:
             # Get graceful vs force choice
-            choice = await self.app.push_screen_wait(
+            choice = await self.app.push_modal(
                 ConfirmModal(f"Graceful shutdown for {estate}? (No = Force kill)", "Stop Method")
             )
             
@@ -776,7 +778,7 @@ class EstateControlScreen(Screen):
     
     async def start_all_estates(self) -> None:
         """Start all detected estates."""
-        confirmed = await self.app.push_screen_wait(
+        confirmed = await self.app.push_modal(
             ConfirmModal("Start all stopped estates?", "Confirm Start All")
         )
         if not confirmed:
@@ -824,7 +826,7 @@ class EstateControlScreen(Screen):
     
     async def stop_all_estates(self) -> None:
         """Stop all running estates."""
-        confirmed = await self.app.push_screen_wait(
+        confirmed = await self.app.push_modal(
             ConfirmModal("Stop all running estates?", "Confirm Stop All")
         )
         if not confirmed:
@@ -938,7 +940,7 @@ class RobustControlScreen(Screen):
     
     async def stop_robust(self) -> None:
         """Stop Robust server."""
-        confirmed = await self.app.push_screen_wait(
+        confirmed = await self.app.push_modal(
             ConfirmModal("Graceful shutdown for Robust? (No = Force kill)", "Stop Robust")
         )
         
@@ -1310,7 +1312,17 @@ class VergeGridApp(App):
 
     async def on_mount(self) -> None:  # noqa: D401
         await self.push_screen(MainScreen(self))
-    
+
+    async def push_modal(
+        self, screen: Screen[ScreenResultType]
+    ) -> ScreenResultType | Any:
+        worker = self.run_worker(
+            partial(self.push_screen_wait, screen),
+            name="modal",
+            description=f"Waiting for {screen!r}",
+        )
+        return await worker.wait()
+
     def action_quit(self) -> None:
         self.exit()
 
