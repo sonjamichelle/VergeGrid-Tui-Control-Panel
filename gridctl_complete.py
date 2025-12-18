@@ -1294,10 +1294,6 @@ class VergeGridApp(App):
         margin: 1 0;
     }
 
-    .main-content {
-        gap: 2;
-    }
-
     .menu-list {
         width: 30;
         border: solid $accent;
@@ -1312,7 +1308,6 @@ class VergeGridApp(App):
     }
 
     .status-content {
-        gap: 1;
         padding: 1;
         border: solid $accent;
     }
