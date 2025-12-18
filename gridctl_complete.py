@@ -1189,49 +1189,74 @@ class SettingsScreen(Screen):
             self.status_log.write(f"Connection test error: {e}")
 
 class MainScreen(Screen):
-    """Main menu screen."""
-    
+    """Main menu screen with a persistent GUI-like layout."""
+
     def __init__(self, app_ref) -> None:
         super().__init__()
         self.app_ref = app_ref
-    
-    def compose(self) -> ComposeResult:
-        menu_items = [
-            ("robust", "Robust Controls"),
-            ("estates", "Estate Controls"),
-            ("login", "Login Controls"),
-            ("status", "Region Status"),
-            ("sysinfo", "System Info"),
-            ("settings", "Settings"),
-            ("quit", "Quit")
+        self.status_log: Log
+        self.info_panel: Static
+        self.menu = [
+            ("robust", "Robust Controls", lambda: RobustControlScreen(self.app_ref)),
+            ("estates", "Estate Controls", lambda: EstateControlScreen(self.app_ref)),
+            ("login", "Login Controls", lambda: LoginControlScreen(self.app_ref)),
+            ("status", "Region Status", lambda: RegionStatusScreen(self.app_ref)),
+            ("sysinfo", "System Info", lambda: SystemInfoScreen()),
+            ("settings", "Settings", lambda: SettingsScreen(self.app_ref)),
+            ("quit", "Quit", lambda: self.app.exit()),
         ]
-        
-        buttons = [Button(label, id=key, classes="menu-button") for key, label in menu_items]
-        
+        self._intro_logged = False
+
+    def compose(self) -> ComposeResult:
+        self.info_panel = Static("", classes="info-panel")
+        menu_items = [
+            ListItem(Label(label), id=key) for key, label, _ in self.menu
+        ]
+        self.status_log = Log(highlight=False, classes="status-log")
+
         yield Container(
             Vertical(
                 Label("VergeGrid Control Panel", classes="main-title"),
-                Label("Select an option:", classes="subtitle"),
-                *buttons,
+                Horizontal(
+                    ListView(*menu_items, id="main-menu", highlight=True, classes="menu-list"),
+                    Vertical(
+                        Label("Live Status", classes="section-title"),
+                        self.info_panel,
+                        Label("Activity Log:", classes="log-title"),
+                        self.status_log,
+                        classes="status-content",
+                    ),
+                    classes="main-content",
+                ),
                 classes="main-menu"
             )
         )
-    
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "quit":
-            self.app.exit()
-        elif event.button.id == "robust":
-            self.app.push_screen(RobustControlScreen(self.app_ref))
-        elif event.button.id == "estates":
-            self.app.push_screen(EstateControlScreen(self.app_ref))
-        elif event.button.id == "login":
-            self.app.push_screen(LoginControlScreen(self.app_ref))
-        elif event.button.id == "status":
-            self.app.push_screen(RegionStatusScreen(self.app_ref))
-        elif event.button.id == "sysinfo":
-            self.app.push_screen(SystemInfoScreen())
-        elif event.button.id == "settings":
-            self.app.push_screen(SettingsScreen(self.app_ref))
+
+    async def on_mount(self) -> None:
+        self.set_interval(10, self.refresh_info)
+        self.refresh_info()
+
+    def refresh_info(self) -> None:
+        info = get_host_info()
+        lines = [
+            f"Host: {info.hostname}",
+            f"OS: {info.os_info}",
+            f"Uptime: {info.uptime}",
+        ]
+        self.info_panel.update("\n".join(lines))
+        if not self._intro_logged:
+            self.status_log.write("Use arrow keys/Enter to navigate the menu.")
+            self._intro_logged = True
+
+    async def on_list_view_selected(self, event: ListView.Selected) -> None:
+        index = event.list_view.index
+        if index is None or index >= len(self.menu):
+            return
+        _, label, action = self.menu[index]
+        self.status_log.write(f"Opening {label}...")
+        result = action()
+        if isinstance(result, Screen):
+            self.app.push_screen(result)
 
 class VergeGridApp(App):
     """Main Textual application."""
@@ -1267,6 +1292,29 @@ class VergeGridApp(App):
         height: 10;
         border: solid $accent;
         margin: 1 0;
+    }
+
+    .main-content {
+        gap: 2;
+    }
+
+    .menu-list {
+        width: 30;
+        border: solid $accent;
+        padding: 1;
+        max-height: 20;
+    }
+
+    .info-panel {
+        border: round $accent;
+        padding: 1;
+        height: 6;
+    }
+
+    .status-content {
+        gap: 1;
+        padding: 1;
+        border: solid $accent;
     }
     
     .modal-container {
