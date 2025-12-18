@@ -748,8 +748,8 @@ class TmuxConsoleScreen(Screen):
         )
 
     async def on_mount(self) -> None:
-            self.poll_task = asyncio.create_task(self._poll_output_loop())
-            self.set_focus(self.command_input)
+        self.poll_task = asyncio.create_task(self._poll_output_loop())
+        self.set_focus(self.command_input)
 
     async def on_unmount(self) -> None:
         if self.poll_task:
@@ -760,22 +760,22 @@ class TmuxConsoleScreen(Screen):
     async def _poll_output_loop(self) -> None:
         while True:
             try:
-            output = await asyncio.to_thread(
-                tmux.capture_output, self.session, 200, self.app_ref.transport
-            )
+                output = await asyncio.to_thread(
+                    tmux.capture_output, self.session, 200, self.app_ref.transport
+                )
             except Exception as error:  # pylint: disable=broad-except
                 self.console_log.write(f"Console poll failed: {error}")
                 await asyncio.sleep(1)
                 continue
 
-                if output:
-                    lines = output.splitlines()
-                    if len(lines) < self._last_line_count:
-                        self._last_line_count = 0
-                    new_lines = lines[self._last_line_count :]
-                    self._last_line_count = len(lines)
-                    for line in new_lines:
-                        self.console_log.write(line)
+            if output:
+                lines = output.splitlines()
+                if len(lines) < self._last_line_count:
+                    self._last_line_count = 0
+                new_lines = lines[self._last_line_count :]
+                self._last_line_count = len(lines)
+                for line in new_lines:
+                    self.console_log.write(line)
             await asyncio.sleep(1)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
