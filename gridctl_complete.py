@@ -24,7 +24,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen, ScreenResultType
 from textual.widgets import (
     Button, DataTable, Footer, Header, Input, Label, 
-    ListItem, ListView, Log, ProgressBar, Static, TextArea
+    ListItem, ListView, Log, ProgressBar, Static, TextArea, TextLog
 )
 
 import psutil
@@ -710,13 +710,13 @@ class TmuxConsoleScreen(Screen):
         self.app_ref = app_ref
         self.session = session
         self.title = title
-        self.log: Log
+        self.console_log: TextLog
         self.command_input: Input
         self.poll_task: asyncio.Task | None = None
         self._last_output: str = ""
 
     def compose(self) -> ComposeResult:
-        self.log = Log(highlight=False, classes="console-log")
+        self.console_log = TextLog(highlight=False, classes="console-log")
         self.command_input = Input(placeholder="Send command (Enter)", classes="console-input")
         yield Container(
             Vertical(
@@ -725,15 +725,15 @@ class TmuxConsoleScreen(Screen):
                     Button("Back", id="back-console"),
                     classes="button-row",
                 ),
-                self.log,
+                self.console_log,
                 self.command_input,
                 classes="console-content",
             )
         )
 
     async def on_mount(self) -> None:
-        self.poll_task = asyncio.create_task(self._poll_output_loop())
-        self.set_focus(self.command_input)
+            self.poll_task = asyncio.create_task(self._poll_output_loop())
+            self.set_focus(self.command_input)
 
     async def on_unmount(self) -> None:
         if self.poll_task:
@@ -748,21 +748,21 @@ class TmuxConsoleScreen(Screen):
                     tmux.capture_output, self.session, 200, self.app_ref.transport
                 )
             except Exception as error:  # pylint: disable=broad-except
-                self.log.write(f"Console poll failed: {error}")
+                self.console_log.write(f"Console poll failed: {error}")
                 await asyncio.sleep(1)
                 continue
 
             if output and output != self._last_output:
                 self._last_output = output
-                self.log.clear()
+                self.console_log.clear()
                 for line in output.splitlines():
-                    self.log.write(line)
+                    self.console_log.write(line)
             await asyncio.sleep(1)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         command = event.value.strip()
         if command:
-            self.log.write(f"> {command}")
+            self.console_log.write(f"> {command}")
             tmux.send_text(self.session, command, self.app_ref.transport)
             self.command_input.value = ""
 
