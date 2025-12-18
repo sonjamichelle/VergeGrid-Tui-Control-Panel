@@ -1218,7 +1218,7 @@ class MainScreen(Screen):
             Vertical(
                 Label("VergeGrid Control Panel", classes="main-title"),
                 Horizontal(
-                    ListView(*menu_items, id="main-menu", highlight=True, classes="menu-list"),
+                    ListView(*menu_items, id="main-menu", classes="menu-list"),
                     Vertical(
                         Label("Live Status", classes="section-title"),
                         self.info_panel,
