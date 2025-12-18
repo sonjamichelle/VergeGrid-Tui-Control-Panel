@@ -827,7 +827,7 @@ robust_controls_menu() {
 estate_controls_menu() {
     while true; do
         local choice
-        choice=$(dialog_cmd --stdout --menu "Estate Controls" 22 70 12 \
+        choice=$(dialog_cmd --stdout --menu "Estate Controls" 22 70 13 \
             1 "Start ALL Estates" \
             2 "Stop ALL Estates" \
             3 "Start ONE Estate" \
@@ -836,7 +836,8 @@ estate_controls_menu() {
             6 "Reload Config on ONE Estate" \
             7 "Edit Estate Args" \
             8 "Attach to Estate console (tmux)" \
-            9 "Back")
+            9 "Region Status" \
+            10 "Back")
 
         case "$choice" in
             1) start_all ;;
@@ -847,6 +848,7 @@ estate_controls_menu() {
             6) instance_select reload ;;
             7) instance_select editargs ;;
             8) attach_estate_console ;;
+            9) view_status ;;
             *) return ;;
         esac
     done
@@ -1291,23 +1293,21 @@ main_menu() {
         title="$(build_header)"
 
         local choice
-        choice=$(dialog_cmd --stdout --menu "$title" 22 70 9 \
+        choice=$(dialog_cmd --stdout --menu "$title" 22 70 6 \
             1 "Robust Controls" \
             2 "Estate Controls" \
             3 "Login Controls" \
-            4 "Region Status" \
-            5 "System Info" \
-            6 "Settings" \
-            7 "Quit")
+            4 "System Info" \
+            5 "Settings" \
+            6 "Quit")
 
         case "$choice" in
             1) robust_controls_menu ;;
             2) estate_controls_menu ;;
             3) login_menu ;;
-            4) view_status ;;
-            5) system_info_menu ;;
-            6) settings_menu ;;
-            7) clear; exit 0 ;;
+            4) system_info_menu ;;
+            5) settings_menu ;;
+            6) clear; exit 0 ;;
         esac
     done
 }
