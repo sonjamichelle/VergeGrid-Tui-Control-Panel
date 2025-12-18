@@ -411,7 +411,7 @@ view_status() {
         done
     } > /tmp/vg_status.$$
 
-    dialog_cmd --textbox /tmp/vg_status.$$ 25 70
+    dialog_cmd --exit-label "Back" --textbox /tmp/vg_status.$$ 25 70
     rm -f /tmp/vg_status.$$
 }
 
