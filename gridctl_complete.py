@@ -7,10 +7,10 @@ Full conversion of gridctl-portable.sh functionality.
 import asyncio
 import os
 import platform
-import shutil
 import socket
 import subprocess
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -690,15 +690,85 @@ class EstateControlScreen(Screen):
             session_file = Path.home() / ".gridstl_sessions" / f"estate_{selected}.session"
             if session_file.exists():
                 session = session_file.read_text().strip()
-                tmux_bin = shutil.which("tmux")
-                if not tmux_bin:
-                    self.status_log.write("tmux not found; cannot attach.")
-                    return
-                self.status_log.write(f"Attaching to tmux session {session}...")
-                try:
-                    subprocess.run([tmux_bin, "attach", "-t", session], check=True)
-                except subprocess.CalledProcessError as exc:
-                    self.status_log.write(f"tmux attach failed: {exc}")
+                self.app.push_screen(
+                    TmuxConsoleScreen(
+                        self.app_ref,
+                        session,
+                        title=f"{human_name(selected)} Console",
+                    )
+                )
+
+class TmuxConsoleScreen(Screen):
+    """Embedded console view that polls tmux pane output."""
+
+    def __init__(self, app_ref, session: str, title: str) -> None:
+        super().__init__()
+        self.app_ref = app_ref
+        self.session = session
+        self.title = title
+        self.log: Log
+        self.command_input: Input
+        self.poll_task: asyncio.Task | None = None
+        self._last_output: str = ""
+
+    def compose(self) -> ComposeResult:
+        self.log = Log(highlight=False, classes="console-log")
+        self.command_input = Input(placeholder="Send command (Enter)", classes="console-input")
+        yield Container(
+            Vertical(
+                Horizontal(
+                    Label(self.title, classes="section-title"),
+                    Button("Back", id="back-console"),
+                    classes="button-row",
+                ),
+                self.log,
+                self.command_input,
+                classes="console-content",
+            )
+        )
+
+    async def on_mount(self) -> None:
+        self.poll_task = asyncio.create_task(self._poll_output_loop())
+        self.set_focus(self.command_input)
+
+    async def on_unmount(self) -> None:
+        if self.poll_task:
+            self.poll_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.poll_task
+
+    async def _poll_output_loop(self) -> None:
+        while True:
+            try:
+                output = await asyncio.to_thread(
+                    tmux.capture_output, self.session, 200, self.app_ref.transport
+                )
+            except Exception as error:  # pylint: disable=broad-except
+                self.log.write(f"Console poll failed: {error}")
+                await asyncio.sleep(1)
+                continue
+
+            if output and output != self._last_output:
+                self._last_output = output
+                self.log.clear()
+                for line in output.splitlines():
+                    self.log.write(line)
+            await asyncio.sleep(1)
+
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        command = event.value.strip()
+        if command:
+            self.log.write(f"> {command}")
+            tmux.send_text(self.session, command, self.app_ref.transport)
+            self.command_input.value = ""
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "back-console":
+            self.app.pop_screen()
+
+    async def on_key(self, event: events.Key) -> None:
+        if event.key == "q":
+            self.app.pop_screen()
     
     async def start_estate(self, estate: str) -> None:
         """Start a specific estate."""
@@ -983,15 +1053,9 @@ class RobustControlScreen(Screen):
         session_file = Path.home() / ".gridstl_sessions" / "robust.session"
         if session_file.exists():
             session = session_file.read_text().strip()
-            tmux_bin = shutil.which("tmux")
-            if not tmux_bin:
-                self.status_log.write("tmux not found; cannot attach.")
-                return
-            self.status_log.write(f"Attaching to tmux session {session}...")
-            try:
-                subprocess.run([tmux_bin, "attach", "-t", session], check=True)
-            except subprocess.CalledProcessError as exc:
-                self.status_log.write(f"tmux attach failed: {exc}")
+                self.app.push_screen(
+                    TmuxConsoleScreen(self.app_ref, session, title="Robust Console")
+                )
         else:
             self.status_log.write("No Robust session found")
 
@@ -1292,6 +1356,24 @@ class VergeGridApp(App):
         height: 10;
         border: solid $accent;
         margin: 1 0;
+    }
+
+    .console-content {
+        border: solid $accent;
+        padding: 1;
+    }
+
+    .console-log {
+        height: 15;
+        border: solid $surface;
+        overflow-y: auto;
+        padding: 1;
+    }
+
+    .console-input {
+        height: 3;
+        border: solid $accent;
+        padding: 0 1;
     }
 
     .menu-list {
