@@ -466,12 +466,14 @@ load_oar() {
     region=$(select_region_for_estate "$estate")
     [ -z "$region" ] && return
 
-    local start_dir="$ESTATES/"
+    local oar_root="${VG_OAR_DIR:-$(readlink -f "$ESTATES/../OAR")}"
+    [ -d "$oar_root" ] || oar_root="$ESTATES/"
+    local start_dir="$oar_root"
     while true; do
         file=$(dialog_cmd --stdout --fselect "$start_dir" 20 70)
         [ -z "$file" ] && return
         if [ -d "$file" ]; then
-            start_dir="${file%/}/"
+            start_dir="$(readlink -f "$file")/"
             continue
         fi
         break
