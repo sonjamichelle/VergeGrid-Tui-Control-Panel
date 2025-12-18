@@ -1306,8 +1306,10 @@ class VergeGridApp(App):
     
     def compose(self) -> ComposeResult:
         yield HeaderPanel()
-        yield MainScreen(self)
         yield Footer()
+
+    async def on_mount(self) -> None:  # noqa: D401
+        await self.push_screen(MainScreen(self))
     
     def action_quit(self) -> None:
         self.exit()
