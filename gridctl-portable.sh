@@ -471,6 +471,7 @@ load_oar() {
     local start_dir="$oar_root"
     while true; do
         file=$(dialog_cmd --stdout --fselect "$start_dir" 20 70)
+        file="${file//$'\r'/}"
         [ -z "$file" ] && return
         if [ -d "$file" ]; then
             start_dir="$(readlink -f "$file")/"
