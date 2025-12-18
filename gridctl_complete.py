@@ -1053,9 +1053,9 @@ class RobustControlScreen(Screen):
         session_file = Path.home() / ".gridstl_sessions" / "robust.session"
         if session_file.exists():
             session = session_file.read_text().strip()
-                self.app.push_screen(
-                    TmuxConsoleScreen(self.app_ref, session, title="Robust Console")
-                )
+            self.app.push_screen(
+                TmuxConsoleScreen(self.app_ref, session, title="Robust Console")
+            )
         else:
             self.status_log.write("No Robust session found")
 
